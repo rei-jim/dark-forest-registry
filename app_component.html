@@ -862,7 +862,15 @@ const CSS = `
   background:linear-gradient(94deg,#eaf1ff,#9fc6ff 46%,#c9a8ff);
   -webkit-background-clip:text; background-clip:text; color:transparent;
 }
-.masthead .sub{margin:10px 0 0; max-width:62ch; font-size:14px; line-height:1.6; color:var(--text2)}
+/* Cap the measure for readability, but let it actually use the masthead on a
+   wide screen — at 62ch it stranded ~900px of empty space to its right. */
+.masthead .sub{margin:11px 0 0; max-width:74ch; font-size:14px; line-height:1.62; color:var(--text2)}
+@media (min-width:1200px){
+  .masthead .sub{max-width:88ch; font-size:15px; line-height:1.65}
+}
+@media (min-width:1500px){
+  .masthead .sub{max-width:100ch}
+}
 .inline-seal{
   white-space:nowrap; padding:1px 6px; border-radius:5px; font-size:12.5px;
   border:1px dashed #6b3232; background:#1c1114; color:#e79a9a;
