@@ -1,4 +1,4 @@
-"""The Dark Forest Registry — a spoiler-free character map of Liu Cixin's
+"""The Dark Forest Registry - a spoiler-free character map of Liu Cixin's
 Remembrance of Earth's Past trilogy, served through Streamlit.
 
 Streamlit is Python and cannot run JSX directly, so the React component lives

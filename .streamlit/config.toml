@@ -3,7 +3,7 @@
 # block still applies if this is ever deployed.
 
 [server]
-# Bind to loopback only — no external URL, nothing exposed to the network.
+# Bind to loopback only - no external URL, nothing exposed to the network.
 address = "localhost"
 port = 8501
 headless = true
