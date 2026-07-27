@@ -1,5 +1,9 @@
 # The Dark Forest Registry
 
+**[Open the registry →](https://dark-forest-registry.streamlit.app/)**
+
+[![Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://dark-forest-registry.streamlit.app/)
+
 A spoiler-free, star-chart character guide to Liu Cixin's **Remembrance of
 Earth's Past** trilogy - *The Three-Body Problem*, *The Dark Forest*, and
 *Death's End*. (Book IV is not part of this registry.)
@@ -108,10 +112,14 @@ the constellation re-packs itself.
 > need to. If a sentence would only make sense to someone who has finished the
 > book, it does not belong.
 
-## Deploy on Streamlit Community Cloud (free)
+## Deployment
 
-1. Push this folder to a GitHub repo.
-2. Go to https://share.streamlit.io → **Create app** → deploy from GitHub.
-3. **Main file path** = `streamlit_app.py`. Deploy.
+Live on Streamlit Community Cloud at
+**https://dark-forest-registry.streamlit.app/**, built from `main` of this
+repo with **Main file path** = `streamlit_app.py`. Every push to `main`
+redeploys automatically.
 
-Every push to `main` redeploys automatically.
+To stand up your own copy: push the folder to a GitHub repo, go to
+https://share.streamlit.io → **Create app** → deploy from GitHub, and point it
+at `streamlit_app.py`. Cloud ignores the `[server]` block in
+`.streamlit/config.toml` and supplies its own, but keeps the theme.
