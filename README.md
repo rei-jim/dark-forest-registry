@@ -45,6 +45,9 @@ where Book II ends, and says nothing about Book III.
   which other books the character appears in
 - A sealed, manually-opened **full entry** per character per book (see below)
 - Deterministic layout — no randomness, so the chart never reshuffles
+- **Responsive**: the constellation measures its container and lays itself out
+  for the real width, so on a phone it becomes one cluster per row at readable
+  1:1 type rather than a shrunken 1080px chart
 
 ## What this repo is
 

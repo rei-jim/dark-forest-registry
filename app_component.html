@@ -429,7 +429,8 @@ const CAST = [
 ];
 
 /* ---------------------------------------------------------------- geometry */
-const CANVAS_W = 1080;
+const CANVAS_W = 1080;   // desktop canvas width
+const COMPACT_W = 620;   // below this the layout switches to phone geometry
 const NODE_R = 15;
 
 // Deterministic jitter so the constellation looks hand-scattered but never
@@ -439,8 +440,12 @@ function wobble(seed, spread) {
   return ((s - Math.floor(s)) - 0.5) * 2 * spread;
 }
 
-// Lay out one book: cluster members onto rings, pack clusters into rows.
-function layoutBook(entries) {
+// Lay out one book for a GIVEN canvas width, so the SVG can render at roughly
+// 1:1 with CSS pixels instead of being scaled down to illegibility on a phone.
+// Everything (ring radii, label room, row packing) is derived from `W`.
+function layoutBook(entries, W = CANVAS_W) {
+  const compact = W < COMPACT_W;
+  const pad = compact ? 40 : 66;          // room under the outer ring for labels
   const byCluster = new Map();
   for (const e of entries) {
     if (!byCluster.has(e.cluster)) byCluster.set(e.cluster, []);
@@ -450,24 +455,30 @@ function layoutBook(entries) {
     .map(([key, members]) => ({ key, members }))
     .sort((a, b) => b.members.length - a.members.length || a.key.localeCompare(b.key));
 
-  // ring geometry per group
+  // ring geometry per group, clamped so a cluster can never be wider than the
+  // canvas (otherwise narrow screens clip the outermost names).
+  const maxRing = Math.max(46, W / 2 - pad);
   for (const g of groups) {
     const n = g.members.length;
     if (n === 1) { g.rings = [{ r: 0, count: 1 }]; g.ring = 0; }
-    else if (n <= 6) { g.ring = 62 + n * 4; g.rings = [{ r: g.ring, count: n }]; }
-    else {
+    else if (n <= 6) {
+      g.ring = Math.min(maxRing, (compact ? 54 : 62) + n * 4);
+      g.rings = [{ r: g.ring, count: n }];
+    } else {
       const outer = Math.ceil(n * 0.62), inner = n - outer;
-      g.ring = 78 + n * 3.4;
-      g.rings = [{ r: g.ring, count: outer }, { r: g.ring * 0.48, count: inner }];
+      // On a phone push the two rings further apart: adjacent tap targets need
+      // real space between them, and vertical room is free (the page scrolls).
+      g.ring = Math.min(maxRing, compact ? 72 + n * 4.2 : 78 + n * 3.4);
+      g.rings = [{ r: g.ring, count: outer }, { r: g.ring * (compact ? 0.42 : 0.48), count: inner }];
     }
-    g.box = 2 * (g.ring + 66); // room for the name labels under the outer ring
+    g.box = Math.min(W, 2 * (g.ring + pad));
   }
 
-  // greedy rows
+  // greedy rows — on a phone this naturally becomes one cluster per row
   const rows = [];
   let row = [], rowW = 0;
   for (const g of groups) {
-    if (row.length && rowW + g.box > CANVAS_W) { rows.push({ items: row, w: rowW }); row = []; rowW = 0; }
+    if (row.length && rowW + g.box > W) { rows.push({ items: row, w: rowW }); row = []; rowW = 0; }
     row.push(g); rowW += g.box;
   }
   if (row.length) rows.push({ items: row, w: rowW });
@@ -476,7 +487,7 @@ function layoutBook(entries) {
   const placed = [];
   for (const r of rows) {
     const rowH = Math.max(...r.items.map((g) => g.box));
-    let x = (CANVAS_W - r.w) / 2;
+    let x = (W - r.w) / 2;
     for (const g of r.items) {
       const cx = x + g.box / 2, cy = y + rowH / 2;
       let i = 0;
@@ -485,10 +496,11 @@ function layoutBook(entries) {
         for (let k = 0; k < ring.count; k++, i++) {
           const m = g.members[i];
           const a = -Math.PI / 2 + (k / ring.count) * Math.PI * 2 + (ring.r ? 0.22 : 0);
+          const jx = compact ? 4 : 9, jy = compact ? 3 : 7;
           nodes.push({
             ...m,
-            x: cx + Math.cos(a) * ring.r + wobble(i + g.key.length, ring.r ? 9 : 0),
-            y: cy + Math.sin(a) * ring.r * 0.86 + wobble(i * 3.1 + 1, ring.r ? 7 : 0),
+            x: cx + Math.cos(a) * ring.r + wobble(i + g.key.length, ring.r ? jx : 0),
+            y: cy + Math.sin(a) * ring.r * 0.86 + wobble(i * 3.1 + 1, ring.r ? jy : 0),
           });
         }
       }
@@ -497,7 +509,27 @@ function layoutBook(entries) {
     }
     y += rowH;
   }
-  return { clusters: placed, height: Math.max(y, 320) };
+  return { clusters: placed, width: W, compact, height: Math.max(y, compact ? 260 : 320) };
+}
+
+// Measure an element's live width so the layout can respond to the real
+// viewport — phones, rotated phones, and a resized Streamlit iframe alike.
+function useMeasuredWidth(ref, fallback) {
+  const [w, setW] = useState(fallback);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const read = () => setW(Math.max(300, Math.round(el.clientWidth)));
+    read();
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", read);
+      return () => window.removeEventListener("resize", read);
+    }
+    const ro = new ResizeObserver(read);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [ref]);
+  return w;
 }
 
 /* -------------------------------------------------------------------- app */
@@ -508,11 +540,28 @@ function App() {
   const [focusCluster, setFocusCluster] = useState(null);
   const [query, setQuery] = useState("");
 
+  const wrapRef = useRef(null);
+  const asideRef = useRef(null);
+  const wrapW = useMeasuredWidth(wrapRef, CANVAS_W);
+
   const entries = useMemo(() => CAST
     .filter((c) => c.books[book])
     .map((c) => ({ id: c.id, name: c.name, aka: c.aka, ...c.books[book] })), [book]);
 
-  const layout = useMemo(() => layoutBook(entries), [entries]);
+  // Lay out for the width we actually have, minus the wrapper's own padding.
+  const layout = useMemo(() => layoutBook(entries, Math.max(300, wrapW - 16)), [entries, wrapW]);
+  const compact = layout.compact;
+
+  // On a phone the dossier sits below the map, so a tap on a star would other-
+  // wise change something off-screen. Bring it into view.
+  const pick = (id) => {
+    setSelected(id);
+    if (id && compact) {
+      requestAnimationFrame(() => {
+        if (asideRef.current) asideRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    }
+  };
   const byId = useMemo(() => new Map(entries.map((e) => [e.id, e])), [entries]);
   const sel = selected ? byId.get(selected) : null;
 
@@ -573,8 +622,9 @@ function App() {
       </header>
 
       <div className="stage">
-        <div className="canvas-wrap">
-          <svg viewBox={`0 0 ${CANVAS_W} ${layout.height}`} className="canvas"
+        <div className="canvas-wrap" ref={wrapRef}>
+          <svg viewBox={`0 0 ${layout.width} ${layout.height}`} className={`canvas ${compact ? "sm" : ""}`}
+            style={{ height: layout.height }}
             role="img" aria-label={`Characters of ${activeBook.title}`}>
             <defs>
               <filter id="glow" x="-120%" y="-120%" width="340%" height="340%">
@@ -608,18 +658,21 @@ function App() {
 
                     {cl.nodes.map((n) => {
                       const on = selected === n.id, hot = hover === n.id;
+                      const r = compact ? 12 : NODE_R;
                       return (
                         <g key={n.id} className={`node ${on ? "sel" : ""} ${hot ? "hot" : ""}`}
                           transform={`translate(${n.x},${n.y})`} tabIndex={0} role="button"
                           aria-label={n.name}
-                          onClick={() => setSelected(on ? null : n.id)}
-                          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelected(on ? null : n.id); } }}
+                          onClick={() => pick(on ? null : n.id)}
+                          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(on ? null : n.id); } }}
                           onPointerEnter={() => setHover(n.id)} onPointerLeave={() => setHover(null)}>
-                          {(on || hot) && <circle r={NODE_R + 12} fill={meta.color} opacity="0.5" filter="url(#glow)" />}
-                          <circle r={NODE_R} className="disc" fill="#0b0e17"
+                          {/* invisible finger-sized hit area — a 12px star is not tappable */}
+                          <circle r={compact ? 21 : 22} fill="transparent" />
+                          {(on || hot) && <circle r={r + 12} fill={meta.color} opacity="0.5" filter="url(#glow)" />}
+                          <circle r={r} className="disc" fill="#0b0e17"
                             stroke={meta.color} strokeWidth={on ? 2.6 : 1.4} />
-                          <circle r={4.6} fill={meta.color} className="core" />
-                          <text y={NODE_R + 17} textAnchor="middle" className="node-label">{n.name}</text>
+                          <circle r={compact ? 4 : 4.6} fill={meta.color} className="core" />
+                          <text y={r + (compact ? 15 : 17)} textAnchor="middle" className="node-label">{n.name}</text>
                         </g>
                       );
                     })}
@@ -645,14 +698,14 @@ function App() {
           <p className="hint">Tap a star for its dossier · tap a group below to dim the rest</p>
         </div>
 
-        <aside className="margin">
+        <aside className="margin" ref={asideRef}>
           <div className="search">
             <input value={query} onChange={(e) => setQuery(e.target.value)}
               placeholder="Find a name…" aria-label="Search characters" />
             {matches.length > 0 && (
               <ul className="results">
                 {matches.map((m) => (
-                  <li key={m.id} onClick={() => { setSelected(m.id); setQuery(""); }}>
+                  <li key={m.id} onClick={() => { pick(m.id); setQuery(""); }}>
                     <i style={{ background: CLUSTERS[m.cluster].color }} />
                     <span>{m.name}</span><em>{m.role}</em>
                   </li>
@@ -666,7 +719,7 @@ function App() {
             <Dossier entry={sel} alsoIn={alsoIn} book={activeBook}
               onBack={() => setSelected(null)} />
           ) : (
-            <Contents book={activeBook} entries={entries} onPick={setSelected}
+            <Contents book={activeBook} entries={entries} onPick={pick}
               focusCluster={focusCluster} setFocusCluster={setFocusCluster} />
           )}
         </aside>
@@ -845,13 +898,43 @@ const CSS = `
   position:relative; z-index:2; max-width:1560px; margin:14px auto 0; padding:0 30px;
   display:grid; grid-template-columns:minmax(0,1fr) 372px; gap:26px; align-items:start;
 }
-@media (max-width:1080px){ .stage{grid-template-columns:1fr} }
+@media (max-width:1080px){ .stage{grid-template-columns:1fr} .margin{position:static} }
+
+/* ---- phones -------------------------------------------------------------
+   The constellation now lays itself out for the measured width (see
+   layoutBook), so this only has to fix chrome: tighter gutters, full-width
+   tabs, a non-sticky dossier, and controls big enough to hit with a thumb. */
+@media (max-width:640px){
+  .masthead{padding:20px 14px 4px}
+  .stage{padding:0 14px; gap:16px; margin-top:10px}
+  .title-row{gap:12px}
+  .corner-seal{width:46px; height:46px}
+  .corner-seal span{font-size:24px}
+  .masthead .sub{font-size:13px}
+  .dial{gap:8px; margin-top:16px}
+  .stamp{flex:1 1 100%; min-width:0; padding:10px 13px}
+  .canvas-wrap{padding:4px 2px 8px; border-radius:11px}
+  .record{padding:16px 15px; max-height:none}   /* no inner scroll on a phone */
+  .rec-title{font-size:25px}
+  .desc,.spoiler-text{font-size:17px}
+  .legend{padding:10px 4px 0; gap:6px}
+  .chip{padding:7px 11px; font-size:11.5px}      /* thumb-sized */
+  .facelist li{padding:9px 8px}                  /* thumb-sized */
+  .seal-btn{padding:13px}
+  .results li{padding:10px 9px}
+}
+@media (max-width:380px){
+  .masthead h1{font-size:30px}
+  .canvas.sm .node-label{font-size:11.5px}
+}
 
 .canvas-wrap{
   background:linear-gradient(180deg,#0a0e17cc,#070a11cc); border:1px solid var(--edge);
   border-radius:14px; padding:8px 8px 12px; box-shadow:0 30px 70px -40px #000;
 }
-.canvas{width:100%; height:auto; display:block; touch-action:pan-y}
+.canvas{width:100%; display:block; touch-action:pan-y}
+.canvas.sm .node-label{font-size:12.5px; stroke-width:3px}
+.canvas.sm .cluster-hanzi{font-size:52px}
 .sky{animation:fade .5s ease}
 @keyframes fade{from{opacity:0}to{opacity:1}}
 .cluster{transition:opacity .25s}
@@ -989,6 +1072,29 @@ const CSS = `
 
 const _root = ReactDOM.createRoot(document.getElementById("root"));
 _root.render(<App />);
+
+/* When embedded by Streamlit, tell the host iframe how tall we actually are.
+   Otherwise the component sits in a fixed-height iframe and a phone ends up
+   scrolling inside a scroll. Streamlit's component host listens for this
+   message; if we are opened as a plain file, the postMessage is simply
+   ignored and nothing breaks. */
+(function reportHeight() {
+  if (window.parent === window) return;   // not embedded
+  let last = 0;
+  const send = () => {
+    const h = Math.ceil(document.documentElement.scrollHeight);
+    if (Math.abs(h - last) < 4) return;
+    last = h;
+    try {
+      window.parent.postMessage(
+        { isStreamlitMessage: true, type: "streamlit:setFrameHeight", height: h }, "*");
+    } catch (e) { /* cross-origin host: fall back to the iframe's fixed height */ }
+  };
+  send();
+  if (typeof ResizeObserver !== "undefined") new ResizeObserver(send).observe(document.body);
+  window.addEventListener("resize", send);
+  setTimeout(send, 300);   // after webfonts settle
+})();
 </script>
 </body>
 </html>
