@@ -1,0 +1,20 @@
+# Local-only defaults for The Dark Forest Registry.
+# Streamlit Community Cloud ignores [server] here and sets its own; the [theme]
+# block still applies if this is ever deployed.
+
+[server]
+# Bind to loopback only — no external URL, nothing exposed to the network.
+address = "localhost"
+port = 8501
+headless = true
+
+[browser]
+gatherUsageStats = false
+
+[theme]
+# Match the registry's starfield so the Streamlit chrome doesn't flash white.
+base = "dark"
+backgroundColor = "#07080d"
+secondaryBackgroundColor = "#0d1119"
+textColor = "#dfe6f2"
+primaryColor = "#7f9fd8"

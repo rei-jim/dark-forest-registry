@@ -57,6 +57,8 @@ and `streamlit_app.py` embeds it.
 three-body-character-dict/
 ├── streamlit_app.py       # Streamlit entrypoint (embeds the HTML)
 ├── app_component.html     # the whole app, self-contained (edit CAST here)
+├── .streamlit/
+│   └── config.toml        # dark theme + bind to localhost only
 ├── requirements.txt
 ├── README.md
 └── .gitignore
