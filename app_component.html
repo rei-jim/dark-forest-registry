@@ -1,0 +1,994 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>The Dark Forest Registry</title>
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script>
+  // Newer @babel/standalone defaults the react preset to the automatic JSX
+  // runtime, which emits an ES module import that breaks inside a classic
+  // <script>. Register a classic-runtime variant that compiles to
+  // React.createElement, matching the React UMD global loaded above.
+  Babel.registerPreset("react-classic", {
+    presets: [[Babel.availablePresets.react, { runtime: "classic" }]],
+  });
+</script>
+<style>html,body{margin:0;padding:0;background:#07080d}#root{min-height:100vh}</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" data-presets="react-classic">
+const { useState, useMemo, useRef, useEffect } = React;
+
+/* ============================================================================
+   THE DARK FOREST REGISTRY — a spoiler-safe who's-who of Liu Cixin's
+   REMEMBRANCE OF EARTH'S PAST (books I–III only; Book IV is not canon here).
+   ----------------------------------------------------------------------------
+   One tab per book. Each book is a separate constellation: characters are
+   grouped into "clusters" (affiliations), drawn as stars, and clicking a star
+   opens a dossier with a SPOILER-FREE description.
+
+   The spoiler rule, applied throughout:
+     - a character's entry for book N describes them as they stand when the
+       reader MEETS them in book N, never by what they later turn out to be;
+     - a character who recurs gets a NEW description per book, so the book I
+       tab never leaks book II;
+     - no deaths, no twists, no reveals, no outcomes;
+     - clusters whose very NAME is a mid-book reveal are titled obliquely
+       (e.g. "The Organization").
+
+   Inherent, unavoidable leak — stated plainly in the UI too: a character
+   listed under book III is, by that fact alone, still in the story by then.
+   That is the same trade the volume dial in the MDZS register made.
+
+   Everything is data. To edit, touch CLUSTERS and CAST below; nothing else.
+   ========================================================================== */
+
+const BOOKS = [
+  { n: 1, title: "The Three-Body Problem", cn: "三体", roman: "I",
+    tagline: "A physicist is dead, an experiment is lying, and a nanomaterials researcher is asked to look into it." },
+  { n: 2, title: "The Dark Forest", cn: "黑暗森林", roman: "II",
+    tagline: "The world has four hundred years to prepare, and has just discovered it cannot keep a secret." },
+  { n: 3, title: "Death's End", cn: "死神永生", roman: "III",
+    tagline: "An engineer wakes into other people's futures, again and again, and is handed the choice each time." },
+];
+
+const CLUSTERS = {
+  sci:     { name: "Science & academia",        hanzi: "研", color: "#5fd0e6" },
+  security:{ name: "Police & intelligence",     hanzi: "警", color: "#e8a94b" },
+  military:{ name: "Armed forces",              hanzi: "军", color: "#7fa4dd" },
+  org:     { name: "The Organization",          hanzi: "组", color: "#e0605e",
+             note: "A movement whose real name and purpose you are better off meeting inside the book." },
+  redcoast:{ name: "Red Coast Base",            hanzi: "岸", color: "#d873ad" },
+  before:  { name: "The years before",          hanzi: "昔", color: "#a2957c",
+             note: "China, 1966 onward — the story's oldest wound." },
+  game:    { name: "The game",                  hanzi: "戏", color: "#9a86ee",
+             note: "Avatars inside a very strange piece of software. Some are players, some are not." },
+  tri:     { name: "Trisolaris",                hanzi: "三", color: "#54c79a" },
+  wallfacer:{name: "The Wallfacer Project",     hanzi: "壁", color: "#e6c453" },
+  un:      { name: "The United Nations",        hanzi: "联", color: "#c0c8d4" },
+  common:  { name: "Ordinary lives",            hanzi: "民", color: "#9fb39c" },
+  fleet:   { name: "Deep space",                hanzi: "航", color: "#6fd3b6" },
+  byz:     { name: "Constantinople, 1453",      hanzi: "拜", color: "#cfa370" },
+  tale:    { name: "Stories within the story",  hanzi: "话", color: "#dc9ad4",
+             note: "People who exist only inside a tale someone tells on purpose." },
+};
+
+/* Each entry: id, name, (optional) aka, and a `books` map keyed by book number.
+   Presence of key N = appears in book N. Each value:
+     cluster, role  — affiliation and one-line label
+     desc           — SPOILER-FREE: who they are when you first meet them
+     spoiler        — FULL entry as of the END of that book. Never rendered
+                      until the reader clicks the seal open. Assume everything
+                      in here ruins something.                                */
+const CAST = [
+  // ---------- Book I core ----------
+  { id: "wangmiao", name: "Wang Miao", books: {
+    1: { cluster: "sci", role: "nanomaterials researcher",
+      desc: "Runs a lab building a material stronger than anything has a right to be. He is asked — politely, then much less politely — to spend some time among physicists who are behaving oddly. Our eyes: a competent, decent man with no framework for what he is about to see.",
+      spoiler: "A countdown appears in his photographs and then across his retinas; it stops when he suspends his nanomaterial research, which is the point — the sophons have been sabotaging particle accelerators and Wang's work is on the same list. Through the Three Body game he is recruited toward the ETO, attends the Adventist meeting that the police raid, and learns the whole shape of it: a fleet is coming, four centuries out, and physics has been locked shut in the meantime. His nanofilament is what ends the crisis phase — strung across the Panama Canal as the Guzheng Plan, it slices the tanker Judgment Day into pieces and recovers Evans's archive of Trisolaran messages. He ends the book inside the response, not outside it, listening to Ye Wenjie's confession." },
+    } },
+  { id: "dashi", name: "Shi Qiang", aka: "Da Shi", books: {
+    1: { cluster: "security", role: "police detective",
+      desc: "Rumpled, chain-smoking, crude, and repeatedly disciplined. He has no patience for theory and an unnerving instinct for which detail in a room is the load-bearing one. Wrong about manners, rarely wrong about people.",
+      spoiler: "Ex-counterterrorism, suspended for methods, and pulled back in by Chang Weisi because he is the only person in the building who reacts correctly to the impossible: he simply does not care whether it is science or a conjuring trick, only who benefits. He walks Wang Miao through his breakdown with beer and contempt for despair, and it is Da Shi — not any scientist or general — who proposes the Guzheng Plan, the flat, brutal idea of cutting the ship rather than boarding it. It works. He is the book's argument that the species survives on the unimaginative and the stubborn." },
+    2: { cluster: "security", role: "still a detective",
+      desc: "Older, still smoking, still the man they send when a problem needs a bodyguard who also thinks. His method has not changed and has not needed to.",
+      spoiler: "Assigned to Luo Ji as security and effectively as his handler, he keeps him alive through an assassination attempt he sees coming before anyone else, and finds Zhuang Yan on Luo Ji's absurd description of an imaginary woman. He hibernates and wakes with him into the Crisis Era's other end, still refusing to be awed. He is the one who tells Luo Ji, in the wilderness, that the universe's rules are just a bigger version of a bad neighbourhood — the closest thing to the dark forest anyone says out loud before Luo Ji works it out." },
+    3: { cluster: "security", role: "an old friend",
+      desc: "He turns up again, because of course he does. Same cigarette, same refusal to be impressed by the scale of anything.",
+      spoiler: "Woken briefly to advise Cheng Xin during the Staircase Program era, he gives her the only counsel in the trilogy that would have saved everything: some problems are not yours to solve, and the person who can bear to be hated is the person who should hold the switch. She does not take it. He passes out of the story shortly after, and every catastrophe that follows is arguably a footnote to his being ignored." },
+    } },
+  { id: "yewenjie", name: "Ye Wenjie", books: {
+    1: { cluster: "sci", role: "astrophysicist",
+      desc: "A courteous, quiet woman near the end of a long career, whose youth was broken by the Cultural Revolution. Half the book is the present investigation; the other half is her life, and the two halves are looking for each other.",
+      spoiler: "She is the first contact. Conscripted into Red Coast after her father is beaten to death and she is betrayed by Bai Mulin, she works out that the sun can be used as a radio amplifier and transmits into it; eight years later a reply arrives from a Trisolaran listener begging her not to answer, because answering will reveal Earth's position to a dying civilization that will come and take it. She answers anyway — 'Come here! I will help you conquer this world' — and then kills Yang Weining and Lei Zhicheng to bury the secret. Decades on she becomes the spiritual founder of the Earth-Trisolaris Organization, watches it split into Adventists who want humanity erased and Redemptionists who want it saved, gives Luo Ji the axioms of cosmic sociology almost in passing, and confesses everything at the end. Her last act is to climb Radar Peak at dusk: 'This is humanity's sunset.'" },
+    2: { cluster: "sci", role: "a visit, early",
+      desc: "She appears only briefly, at the start, and leaves a young astronomer with a question about the universe that he will not be able to put back down.",
+      spoiler: "At her daughter's grave she meets Luo Ji and hands him, unprompted, the two axioms of cosmic sociology — survival is the primary need of civilization, and civilization grows while matter does not — plus chains of suspicion and technological explosion. Then she dies, having planted the exact seed that will end the war she started. She never learns it worked." },
+    } },
+  { id: "yezhetai", name: "Ye Zhetai", books: {
+    1: { cluster: "before", role: "professor of physics",
+      desc: "Ye Wenjie's father. A theorist who will not say a thing he does not believe, at the exact moment in history when that is the most dangerous kind of honesty available.",
+      spoiler: "He refuses to recant relativity or the Big Bang at a struggle session and is beaten to death on the stage by four teenage Red Guard girls, one of whom is his other daughter's comrade, while his wife denounces him to save herself and Ye Wenjie watches from the crowd. Everything the trilogy becomes is downstream of this scene: it is the moment Ye Wenjie stops believing humanity can correct itself from the inside." },
+    } },
+  { id: "shaolin", name: "Shao Lin", books: {
+    1: { cluster: "before", role: "physicist",
+      desc: "Ye Wenjie's mother and her father's colleague — considerably better than he is at reading which way the wind is blowing, and at leaning into it.",
+      spoiler: "She denounces her husband publicly and in detail, survives the campaign by doing so, remarries into officialdom, and afterwards will not acknowledge her daughter at all. Her survival is presented without melodrama, which is what makes it unbearable." },
+    } },
+  { id: "yewenxue", name: "Ye Wenxue", books: {
+    1: { cluster: "before", role: "Red Guard",
+      desc: "Ye Wenjie's younger sister, given wholly to the movement and to the beautiful certainty that comes with it.",
+      spoiler: "She sides completely with the faction that destroys her father and is dead herself not long after, killed in the armed factional fighting that consumes the Red Guards from within. Decades later Ye Wenjie tracks down the four women who did the beating and finds them ruined, unrepentant and self-pitying — the interview that finishes off whatever faith in people she had left." },
+    } },
+  { id: "baimulin", name: "Bai Mulin", books: {
+    1: { cluster: "before", role: "journalist",
+      desc: "A reporter visiting the Inner Mongolia production corps where Ye Wenjie is felling trees. He carries a book with him, and lends it to her.",
+      spoiler: "The book is Rachel Carson's Silent Spring, which gives Ye Wenjie the idea that human damage to nature might be structural rather than accidental. When his own letter denouncing environmental policy is discovered, he saves himself by testifying that the handwriting and the ideas were hers. The resulting charge is what strands her in custody and delivers her to Red Coast — she reaches the transmitter because he lied." },
+    } },
+  { id: "yangweining", name: "Yang Weining", books: {
+    1: { cluster: "redcoast", role: "chief engineer",
+      desc: "Runs the engineering of a secret installation on a mountaintop, and was once a graduate student of Ye Wenjie's father. A fundamentally decent man inside an institution built out of suspicion.",
+      spoiler: "He gets Ye Wenjie into Red Coast on a life-sentence-in-place arrangement, protects her, marries her, and fathers Yang Dong; he is kind to her throughout and never suspects a thing. When he and Lei Zhicheng are working on the cliff face below the antenna and are close to discovering the transmission, she engineers their fall. She kills the only two people who could expose her, one of whom is her husband." },
+    } },
+  { id: "leizhicheng", name: "Lei Zhicheng", books: {
+    1: { cluster: "redcoast", role: "political commissar",
+      desc: "The base's commissar: ideologically immaculate, technically more capable than he lets on, and permanently calculating who owes what to whom.",
+      spoiler: "He quietly appropriates Ye Wenjie's solar-amplification research as his own, then stumbles toward the truth of what the base actually received and sent. He dies on the cliff with Yang Weining, killed by her for knowing too much and being the sort of man who would use it." },
+    } },
+  { id: "evans", name: "Mike Evans", books: {
+    1: { cluster: "org", role: "heir, environmentalist",
+      desc: "Son of an oil fortune, spending it to save one species of bird and then something much larger. His idea of what deserves saving is not the usual one, and he arrived at it honestly.",
+      spoiler: "His pan-species communism — that every species has equal claim to Earth and humanity has forfeited its own — makes him the natural leader of the ETO's Adventist wing, which wants the Trisolarans to exterminate humanity outright rather than reform it. He funds the Organization out of the family fortune, runs the tanker Judgment Day as its floating headquarters and command centre, and becomes Trisolaris's primary correspondent. In doing so he discovers the thing that terrifies them both: Trisolarans cannot lie, because they think transparently, and human deception is the one weapon they find genuinely alien. He is killed when the Guzheng filaments cut Judgment Day apart, and dies having been told by his own gods that humans are bugs." },
+    } },
+  { id: "panhan", name: "Pan Han", books: {
+    1: { cluster: "org", role: "biologist, public intellectual",
+      desc: "A celebrated scientist-turned-commentator, fluent in the language of ecological ruin and very comfortable on a stage.",
+      spoiler: "An Adventist. He murders Shen Yufei over the Redemptionist–Adventist split — she wanted Trisolaris to save a reformed humanity, he wants it gone — and is arrested. The killing is what cracks the Organization open for the investigation." },
+    } },
+  { id: "shenyufei", name: "Shen Yufei", books: {
+    1: { cluster: "org", role: "physicist",
+      desc: "Says almost nothing. Plays a peculiar online game with a devotion that looks less like recreation than like a shift she is obliged to work.",
+      spoiler: "A Redemptionist, running the Three Body game as a recruitment filter and worshipping the Trisolarans as a Lord to be served rather than obeyed. She is shot dead in her home by Pan Han, and her death is the thread the police pull." },
+    } },
+  { id: "weicheng", name: "Wei Cheng", books: {
+    1: { cluster: "sci", role: "mathematician",
+      desc: "Frighteningly gifted and entirely without ambition; happiest thinking about nothing in particular. Married to Shen Yufei, whom he does not understand at all.",
+      spoiler: "His idle progress on a numerical model of the three-body problem is why Shen Yufei married him and why the Organization tolerates him: solving the orbits is the one gift that would make Trisolaris no longer need to leave home. He hides in a temple, tells Wang Miao and Da Shi everything he knows about his wife's cult, and is placed under protection. He never realises how close his hobby came to changing the war." },
+    } },
+  { id: "dingyi", name: "Ding Yi", books: {
+    1: { cluster: "sci", role: "theoretical physicist",
+      desc: "Keeps a billiards table and uses it to make an unkind, unanswerable point about what experiments actually promise us.",
+      spoiler: "Yang Dong's partner. The billiards demonstration — move the table and the ball goes elsewhere — is his way of showing Wang Miao what the accelerator results mean: identical experiments giving different answers implies there are no laws, and therefore no physics. He is one of the few who absorbs the sophon reveal without breaking, largely by treating it as an insult rather than a tragedy." },
+    2: { cluster: "sci", role: "theoretical physicist",
+      desc: "Still sharp, still sardonic, and stuck with a physics that has stopped moving. He would like, before the end of his life, to watch one real battle in space.",
+      spoiler: "He hibernates into the era of the great fleets and gets his wish in the worst possible way. Sent to inspect the captured droplet at close range, he understands what it is seconds before anyone else — a single flawless mirror-smooth object that is a weapon, not a probe — and screams at the fleet to run. He is killed in the Doomsday Battle along with almost the entire human space force, having been right one final time and far too late." },
+    } },
+  { id: "yangdong", name: "Yang Dong", books: {
+    1: { cluster: "sci", role: "physicist",
+      desc: "A brilliant young experimentalist at the frontier of theory, and Ye Wenjie's daughter. You meet her mostly through the hole she leaves.",
+      spoiler: "She kills herself in the first pages, and the note explains it exactly: 'Physics has never existed, and will never exist.' Her accelerator results, corrupted by sophons, destroyed the only thing she believed in. She is also the daughter Ye Wenjie had with Yang Weining — the man Ye Wenjie murdered — which means her mother's first contact is what eventually kills her." },
+    } },
+  { id: "sharuishan", name: "Sha Ruishan", books: {
+    1: { cluster: "sci", role: "radio astronomer",
+      desc: "A former student of Ye Wenjie's, generous with telescope time and with gossip, and unbothered about which of the two he is handing over.",
+      spoiler: "He gives Wang Miao access to the cosmic microwave background monitors on the night the entire universe appears to flicker on and off in time with a countdown — the sophons manipulating the CMB to make a private threat look cosmological. It is the moment that breaks Wang, and Sha Ruishan is left cheerfully unaware of what he just witnessed." },
+    } },
+  { id: "changweisi", name: "Chang Weisi", books: {
+    1: { cluster: "military", role: "PLA general",
+      desc: "Quietly coordinating a response to a problem no one in the room will name out loud. Patient, unflappable, already thinking in decades.",
+      spoiler: "He runs the multinational Battle Command Center that turns out to have been standing up a defence for years before Wang Miao ever hears about it, and he is the one who authorises the Guzheng operation. His register never changes — he treats a four-hundred-year war as an administrative problem to be handed on in good order." },
+    2: { cluster: "military", role: "general, Space Force",
+      desc: "Older, and now building a service with no ships, no doctrine and no precedent — only centuries in which to acquire all three.",
+      spoiler: "He builds the Space Force from nothing, fights the defeatism inside it, and is the man Zhang Beihai reports to and quietly manipulates. He dies of old age long before the fleets exist, having correctly judged that his whole job was to hand something intact to people he would never meet." },
+    } },
+  { id: "stanton", name: "Colonel Stanton", books: {
+    1: { cluster: "military", role: "NATO officer",
+      desc: "Brought in when the problem stops being scientific and becomes operational. Impatient with anyone who wants to discuss it further.",
+      spoiler: "He runs the Panama operation and is the loudest voice against boarding, gassing or torpedoing the Judgment Day — all of which would let the crew wipe the archive. He accepts Da Shi's filament plan because it is the only one that takes the ship whole, and he executes it without flinching at what it does to the people aboard." },
+    } },
+  { id: "xubingbing", name: "Xu Bingbing", books: {
+    1: { cluster: "security", role: "information security officer",
+      desc: "A young police officer taking careful notes in rooms where generals shout at scientists.",
+      spoiler: "She stays a minor presence throughout — the procedural, note-taking end of an operation that is otherwise all physicists and soldiers — and is one of the few characters in the book who is never asked to sacrifice or betray anyone." },
+    } },
+
+  // ---------- Book I: the game ----------
+  { id: "kingzhou", name: "King Zhou of Shang", books: {
+    1: { cluster: "game", role: "tyrant",
+      desc: "Rules the first civilization a newcomer to the game stumbles into. His court is cruel and his sky is worse: nothing overhead behaves the way a sky should.",
+      spoiler: "His civilization is destroyed by a Chaotic Era after Fu Xi's calendar fails — the first of many resets. The whole game, it turns out, is a simulation of Trisolaris run by the ETO as a recruitment filter: the impossible sky is three suns, and every civilization you watch die is a real one that did." },
+    } },
+  { id: "fuxi", name: "Fu Xi", books: {
+    1: { cluster: "game", role: "shaman-emperor",
+      desc: "Believes the sun is a thing that can be reasoned with, or at least flattered, and stakes a civilization on it.",
+      spoiler: "He is buried alive as a sacrifice to a sun that does not negotiate, and the civilization that trusted his calendar is destroyed. He stands for the pre-scientific phase of Trisolaran history: two hundred-odd civilizations burned or frozen before anyone accepted that the sky obeyed mechanics rather than intention." },
+    } },
+  { id: "mozi", name: "Mozi", books: {
+    1: { cluster: "game", role: "philosopher-engineer",
+      desc: "Builds a magnificent mechanical model of the heavens out of crystal and conviction, then declines to check it against the actual heavens.",
+      spoiler: "His universe-machine predicts a Stable Era; a Chaotic Era arrives instead and incinerates everything, Mozi included, still refusing to look up. He is the game's parable about theory that will not be falsified — and the counterexample that sets up Copernicus." },
+    } },
+  { id: "copernicus", name: "Copernicus", books: {
+    1: { cluster: "game", role: "a player's avatar",
+      desc: "The name is a promise: whoever is wearing it intends to work out how this world genuinely moves, rather than how it ought to.",
+      spoiler: "This is Wang Miao's own avatar, and the level he clears is the game's central reveal: the world has three suns, not one, and its motion is the three-body problem. The prize for solving it is admission to the ETO, because knowing that Trisolaris cannot predict its own sky is knowing why Trisolaris must leave it." },
+    } },
+  { id: "newton", name: "Newton", books: {
+    1: { cluster: "game", role: "mathematician",
+      desc: "Vain, brilliant, quarrelsome, and in possession of the right mathematics with no way on earth to compute it.",
+      spoiler: "He supplies the differential equations for the three-body motion and immediately discovers they cannot be solved in closed form, then feuds with Leibniz about credit for a calculus that will not save anyone. His mathematics is correct and useless — which is, exactly, the Trisolaran predicament." },
+    } },
+  { id: "vonneumann", name: "Von Neumann", books: {
+    1: { cluster: "game", role: "pragmatist",
+      desc: "Solves an impossible calculation using the only computer the era can supply: people. Thirty million of them, holding flags.",
+      spoiler: "He and Newton persuade Qin Shi Huang to build a human-formation computer — thirty million soldiers as logic gates, complete with a CPU, motherboard and a very literal system crash. It runs, and it predicts a Stable Era that does not come. The sequence is the book's finest set piece and its cruellest joke: perfect engineering against an unsolvable problem still fails." },
+    } },
+  { id: "qinshihuang", name: "Qin Shi Huang", books: {
+    1: { cluster: "game", role: "emperor",
+      desc: "Will spend any number of soldiers on an idea, provided the idea is sufficiently grand and he gets to stand on top of it.",
+      spoiler: "He funds and commands the human computer, and loses his civilization to the Chaotic Era it failed to predict — a tri-solar syzygy that tears the planet's surface apart. In the ETO's reading he is the ideal patron: total authority, total willingness to spend lives on physics." },
+    } },
+  { id: "einstein", name: "Einstein", books: {
+    1: { cluster: "game", role: "a shabby figure with a violin",
+      desc: "Found at the edge of a civilization that has finished with his equations, playing badly and taking it personally.",
+      spoiler: "He appears in the game's final stage, when Trisolaris has abandoned prediction entirely in favour of escape, and his physics has become an irrelevance beside the engineering of a fleet. The game closes by announcing what the ETO wants its recruits to know: the civilization is coming here, and the countdown has already started." },
+    } },
+
+  // ---------- Book I: Trisolaris ----------
+  { id: "princeps", name: "The Princeps", books: {
+    1: { cluster: "tri", role: "head of state",
+      desc: "The voice of a distant government deciding what to do about something it has received. Named only by office — nobody in this world gets a name.",
+      spoiler: "He receives Ye Wenjie's reply, has Listener 1379 executed for the warning, and orders the invasion fleet built and launched — four and a half light years, four hundred and fifty years in transit. He also authorises the sophons: protons unfolded into two dimensions, etched into supercomputers, refolded into eleven, and fired at Earth to lock human fundamental physics for the whole voyage. He is the one who decides that a species that can lie is too dangerous to leave technologically free." },
+    } },
+  { id: "listener1379", name: "Listener 1379", books: {
+    1: { cluster: "tri", role: "monitoring post attendant",
+      desc: "A watchman at a lonely listening station, employed to hear nothing for the whole of a life, and to log that nothing carefully.",
+      spoiler: "He receives Earth's signal, understands instantly what answering will cost the senders, and sends back the trilogy's most famous three words — 'Do not answer!' — three times, knowing it identifies him. It is treason and he does it anyway, out of pity for a world he will never see. He is executed. Ye Wenjie answers anyway, which makes his the first of many futile acts of decency in this story." },
+    } },
+
+  // ---------- Book II ----------
+  { id: "luoji", name: "Luo Ji", books: {
+    2: { cluster: "wallfacer", role: "astronomer, then sociologist",
+      desc: "Enormously gifted at comfort and not at all at responsibility: a man who has arranged his life so that nothing depends on him. He is handed something vast without being told why him, and would sincerely rather not.",
+      spoiler: "He is made a Wallfacer for one reason he does not know: Ye Wenjie gave him cosmic sociology, so Trisolaris tried to have him killed, so humanity concluded he mattered. He spends his authority on a lakeside villa and on having the UN find Zhuang Yan, the woman he had invented in his own head — then loses her and their daughter when the UN takes them into hibernation as leverage. Cornered, he finally does the work: the universe is a dark forest, every civilization a hunter, and any position broadcast is a position destroyed. He proves it by cursing star 187J3X1 with a solar broadcast and waiting; fifty-odd years later a photoid destroys it exactly as predicted. After the Doomsday Battle annihilates the fleet, he digs his own grave beside a buried transmitter, puts a pistol to his heart, and tells Trisolaris that his death releases the coordinates of both worlds. They stop. He ends the book as the Swordholder of a deterrence he invented and detests, reunited with his family." },
+    3: { cluster: "sci", role: "an old man",
+      desc: "Long past the age of ambition, and still there, still watching. Whatever else has changed, he has kept a habit of looking at the sky.",
+      spoiler: "He holds the dark forest deterrence for fifty-four years, aged and hated by a society that regards him as a monster with his thumb on a doomsday switch, and hands it to Cheng Xin — who lets it fall within fifteen minutes. Afterwards he becomes keeper of the Earth Civilization Museum, carving a record of humanity into rock meant to last a hundred million years. He refuses to leave when the solar system is struck, and dies as it is flattened into two dimensions, having been right about everything and thanked for none of it." },
+    } },
+  { id: "beihai", name: "Zhang Beihai", books: {
+    2: { cluster: "military", role: "naval political commissar",
+      desc: "Thinks further ahead than anyone around him and keeps the conclusions to himself. In his vocabulary, faith is not a comfort but an engineering requirement, and he will manufacture it if he has to.",
+      spoiler: "He is an Escapist, secretly certain humanity cannot win, and he operates as an unappointed Wallfacer with no oversight at all. He murders three propulsion scientists with meteorite-fragment bullets — untraceable, unmodern — to kill off the fission-drive research programme and force the fleet down the fusion path that can actually reach another star. He hibernates, wakes into a Space Force glutted with confidence, and hijacks the stellar-class warship Natural Selection to run for deep space, forcing four other ships to chase him. What follows is the Dark Battle: five ships, resources for one, and every crew reaching the same conclusion simultaneously. He is killed when Blue Space destroys Natural Selection — his faith, he admits at the last, was never in victory." },
+    } },
+  { id: "wuyue", name: "Wu Yue", books: {
+    2: { cluster: "military", role: "captain",
+      desc: "Zhang Beihai's friend and opposite: he feels the weight of the future more honestly, and therefore carries it much worse.",
+      spoiler: "He collapses under the defeatism Zhang Beihai spends the book suppressing in others, and withdraws from the Space Force entirely — a warning about what honesty costs in a war nobody expects to win. He is the man Zhang Beihai might have become if he had let himself say what he thought." },
+    } },
+  { id: "tyler", name: "Frederick Tyler", books: {
+    2: { cluster: "wallfacer", role: "former U.S. Secretary of Defense",
+      desc: "Handed unprecedented authority and visibly unsure what a good use of it would look like. He reaches, understandably, for what he already knows.",
+      spoiler: "His plan is a vast swarm of cheap, expendable 'mosquito' craft — and, underneath it, an attempt to recruit crews willing to die en masse, which is really an attempt to build a suicide fleet. His Wallbreaker exposes both layers in public, including the part he had hidden from himself. He kills himself." },
+    } },
+  { id: "reydiaz", name: "Manuel Rey Diaz", books: {
+    2: { cluster: "wallfacer", role: "president",
+      desc: "A Latin American leader who once fought a superpower and won. He expects the tools that worked then to work again, at a rather larger scale.",
+      spoiler: "He develops stellar-class hydrogen bombs and a plan to detonate them inside Mercury, dropping it into the sun and triggering a cascade that would strip the solar system of its planets. His Wallbreaker points out the obvious: this is not a weapon against Trisolaris, it is a gun held to Earth's own head — deterrence by mutual suicide, decades before Luo Ji arrives at the same logic by a better route. Stripped of his post, he goes home to Venezuela and is stoned to death by the people who once adored him." },
+    } },
+  { id: "hines", name: "Bill Hines", books: {
+    2: { cluster: "wallfacer", role: "neuroscientist",
+      desc: "Convinced the decisive battlefield of the next four centuries is inside the human skull, and equipped to go looking.",
+      spoiler: "He builds the mental seal: a device that can stamp a proposition into a brain as unshakable belief, bypassing reason entirely. Sold as a way to manufacture faith in victory, it is banned, and he continues in secret. His Wallbreaker is his own wife, who reveals that the seals he administered were set to the opposite proposition — he had been mass-producing defeatists, seeding an Escapist movement inside the Space Force, because he too believed the war was lost. He hibernates into the future rather than face it." },
+    } },
+  { id: "keiko", name: "Keiko Yamasuki", books: {
+    2: { cluster: "wallfacer", role: "neuroscientist",
+      desc: "Hines's wife and research partner, and the sharper half of the laboratory by some distance.",
+      spoiler: "She is Hines's Wallbreaker. Having worked out what her husband was really stamping into people's heads, she denounces him in open session — the only Wallbreaker who is not an ETO agent but a person acting out of conscience — and then, unable to live with either the betrayal or the discovery, commits suicide immediately afterwards." },
+    } },
+  { id: "kent", name: "Kent", books: {
+    2: { cluster: "un", role: "UN liaison",
+      desc: "Assigned to look after a Wallfacer. Unfailingly courteous, inexhaustibly patient, and completely impossible to shake off.",
+      spoiler: "He absorbs years of Luo Ji's sulking, hedonism and abuse without once losing his manners, and is quietly instrumental in keeping him alive and eventually functional. He is the human face of an institution doing something monstrous — the man who politely arranges the villa, the wife, and the hostage-taking alike." },
+    } },
+  { id: "say", name: "Secretary General Say", books: {
+    2: { cluster: "un", role: "UN Secretary General",
+      desc: "Presides over the founding of a project whose logic she understands perfectly and whose conduct she cannot control at all.",
+      spoiler: "She designs the Wallfacer Project around the single asymmetry humanity has: sophons can read every word and every screen, but not a thought. So four people are given unlimited resources and permission to lie about everything, including to their own species. She understands from the first day that this is a form of tyranny and authorises it anyway." },
+    } },
+  { id: "garanin", name: "Garanin", books: {
+    2: { cluster: "un", role: "UN chair",
+      desc: "Inherits the project and its slow, grinding hearings, where men with unlimited power must be seen to answer questions.",
+      spoiler: "He presides over the project's disgrace: Tyler dead, Rey Diaz destroyed, Hines exposed, and Luo Ji hibernating. It falls to him and his successors to keep an institution alive that has produced nothing but scandals, on the bare chance that the fourth man is doing something after all." },
+    } },
+  { id: "wallbreakers", name: "The Wallbreakers", books: {
+    2: { cluster: "org", role: "a counter-appointment",
+      desc: "For each Wallfacer, one person eventually turns up whose entire purpose is to say out loud what he is doing. They introduce themselves politely, which is the worst part.",
+      spoiler: "ETO agents, appointed by Trisolaris, each dedicated to one Wallfacer and each ultimately correct. They dismantle Tyler, Rey Diaz and — via Keiko — Hines. Luo Ji's Wallbreaker is the exception that matters: he finds his target's plan literally unreadable, because Luo Ji spent years genuinely doing nothing, and the Organization can only conclude that the emptiness is itself the strategy. Their entire existence is proof of the Wallfacer Project's premise, and their one failure is what wins the war." },
+    } },
+  { id: "zhuangyan", name: "Zhuang Yan", books: {
+    2: { cluster: "common", role: "art student",
+      desc: "Young, unhurried, with a landscape painter's eye and no interest in hurrying it. She arrives in Luo Ji's life by a route he did not choose.",
+      spoiler: "Luo Ji dreamed her first — an imaginary lover so precisely specified that Da Shi could go out and find the real woman matching the description. They marry and have a daughter, and then the UN takes both into hibernation, explicitly as leverage: he will work if the reward is getting them back. It does work. She spends most of the book as an instrument, and is returned to him at the end, in a world she never chose to wake into." },
+    } },
+  { id: "zhangyuanchao", name: "Zhang Yuanchao", books: {
+    2: { cluster: "common", role: "retired factory worker",
+      desc: "A Beijing pensioner with a wife, a flat and three floors of neighbours. The Crisis reaches him the way history usually reaches people: as prices, rumours and paperwork.",
+      spoiler: "His thread is the Crisis Era seen from the ground floor: taxes for a war four centuries away, a share market for hibernation slots, and neighbours arguing about whether any of it is real. He lives to see the Great Ravine — the collapse in which the world's entire economy is redirected to the fleet and billions die — which is the book's answer to what preparing for a distant war actually costs the people alive now." },
+    } },
+  { id: "yangjinwen", name: "Yang Jinwen", books: {
+    2: { cluster: "common", role: "retired teacher",
+      desc: "Reads the newspapers properly and explains the end of the world to his neighbours over tea, with the patience of a man who has taught teenagers.",
+      spoiler: "He is the one in the stairwell who actually grasps what the Crisis means, and his careful explanations do nothing to stop his neighbours behaving exactly as people do — hoarding, speculating and blaming. He does not survive the Great Ravine's worst years." },
+    } },
+  { id: "miaofuquan", name: "Miao Fuquan", books: {
+    2: { cluster: "common", role: "coal mine owner",
+      desc: "Rich out of Shanxi, keeping two households and no illusions whatsoever about who ends up paying for the future.",
+      spoiler: "He treats the end of the world as a market, which for a while it is: coal, hibernation, and property in a century nobody can price. The Great Ravine erases the fortune and the assumptions behind it. His thread exists to show the Crisis Era's other face — that people mostly respond to an apocalypse by trying to be well positioned within it." },
+    } },
+  { id: "shixiaoming", name: "Shi Xiaoming", books: {
+    2: { cluster: "common", role: "Da Shi's son",
+      desc: "Proof that ordinary life carries on being ordinary and inconvenient while the species organises its defence.",
+      spoiler: "He is essentially the reason Da Shi has a personal stake in the future rather than a professional one, and the excuse for the book's warmest scenes. His ordinary problems sit deliberately beside a war that will outlast his great-grandchildren." },
+    } },
+  { id: "dongfangyanxu", name: "Dongfang Yanxu", books: {
+    2: { cluster: "fleet", role: "captain",
+      desc: "A young officer of a Space Force that finally has ships. Courteous to the past, and quietly certain it has nothing left to teach her.",
+      spoiler: "Captain of Natural Selection, and gently condescending toward the hibernated 'ancients' until Zhang Beihai — one of those ancients — takes her ship out from under her and runs for deep space. She retakes command, only to watch the Dark Battle happen: five human warships, each realising that the others must be thinking the same thing about fuel and life support. Her generation's confidence does not survive the day, and neither does the idea that humanity would behave better than Trisolaris." },
+    } },
+
+  // ---------- Book III ----------
+  { id: "chengxin", name: "Cheng Xin", books: {
+    3: { cluster: "sci", role: "aerospace engineer",
+      desc: "Gifted, conscientious, and above all trusted — which is how the responsibilities find her. They arrive dressed as compliments and turn out, every time, to be weights.",
+      spoiler: "She proposes the Staircase Program and, learning that Yun Tianming has left her a star, sends his brain to the Trisolaran fleet. Hibernated and woken into the deterrence era, she is elected Swordholder over the objections of everyone who understands what the job requires — she is chosen precisely because she is gentle — and when Trisolaris calls the bluff she cannot press the switch. Deterrence collapses in fifteen minutes; humanity is herded into Australia. Later she inherits Wade's Halo Group, and when his lightspeed research provokes war with the Federation she orders him to surrender and he is executed, killing the one project that could have saved anyone. She receives Tianming's fairy tales, escapes to Planet Blue, is stranded by relativity, and ends inside a pocket universe with Guan Yifan — releasing its mass back so the cosmos can collapse and be reborn. Twice she is handed the species' survival, twice she chooses love and mercy, and twice it is catastrophic. The novel refuses to tell you she was wrong." },
+    } },
+  { id: "aa", name: "AA", books: {
+    3: { cluster: "sci", role: "astronomer turned entrepreneur",
+      desc: "Cheng Xin's friend and manager: an astronomer with a businesswoman's instincts, a bracing shortage of reverence, and a habit of saying the true thing first.",
+      spoiler: "She manages the star Tianming left Cheng Xin, tells her flatly not to take the Swordholder post, and stays with her through the Australian resettlement, the Halo years and the flight to Planet Blue. When Cheng Xin takes the last ship out, AA stays behind on the planet with Cao Bin and the others — the friend who keeps saying the sensible thing and keeps being left with the consequences." },
+    } },
+  { id: "tianming", name: "Yun Tianming", books: {
+    3: { cluster: "common", role: "a college classmate",
+      desc: "Quiet, unlucky, and in love with Cheng Xin without ever having mentioned it. He has very little life left to spend and is thinking about how to spend it.",
+      spoiler: "Dying of cancer, he spends a windfall buying Cheng Xin the star DX3906 and then volunteers for euthanasia — after which she has his brain, and only his brain, launched at the Trisolaran fleet as the Staircase probe, without knowing he is the man who bought her a star. He is captured, regrown, and lives out his life inside Trisolaran society, trusted enough to be dangerous. Under total surveillance he tells Cheng Xin three fairy tales, and every one is a smuggled warning: the Needle-Eye painter is the two-dimensional strike, Prince Ice Sand's umbrella is the black domain, and the bottomless boat and He'ershingenmosiken soap are curvature propulsion and lightspeed flight. He also arranges the gift of a pocket universe. They are allowed a few minutes together and never meet again." },
+    } },
+  { id: "wade", name: "Thomas Wade", books: {
+    3: { cluster: "security", role: "intelligence officer",
+      desc: "Entirely without warmth and entirely without illusions. He will do anything at all, and he says so the way other people list their qualifications.",
+      spoiler: "He runs the Staircase Program, and when Cheng Xin is a rival for the Swordholder post he shoots her — then, imprisoned and hibernated, re-emerges to build Halo Group and pursue curvature propulsion, the one technology that offers escape. He extracts a promise from Cheng Xin to hand him control and to take it back only if she must; when the Federation moves against him he keeps the promise, orders his people to stand down, and goes to execution rather than break his word. He is a monster and he is right, and the book leaves those two facts sitting next to each other without resolving them." },
+    } },
+  { id: "caobin", name: "Cao Bin", books: {
+    3: { cluster: "sci", role: "physicist",
+      desc: "Works on a form of propulsion that a great many important people would much prefer remained theoretical.",
+      spoiler: "He leads the curvature-drive research at Halo Group and is imprisoned when the project is shut down and lightspeed flight outlawed as an existential risk. He is released long after, in time to see how right the project was and how thoroughly too late that knowledge is; he remains on Planet Blue when Cheng Xin leaves." },
+    } },
+  { id: "sophon", name: "Sophon", books: {
+    3: { cluster: "tri", role: "ambassador",
+      desc: "A humanoid in kimono who serves tea with impeccable form and perfect stillness. Every courtesy she performs is a message from somewhere else.",
+      spoiler: "A humanoid robot controlled by sophons, she is Trisolaris's face on Earth during deterrence — and the instant Cheng Xin fails to press the switch, the tea ceremony stops and she becomes the overseer of a forced resettlement of the entire human species into Australia, cheerfully explaining that the survivors will be permitted to eat each other. Later, with Trisolaris itself doomed, she reverts to courtesy and arranges Cheng Xin's brief meeting with Yun Tianming. Her two registers are the same policy: absolute deference to whatever the balance of power currently is." },
+    } },
+  { id: "guanyifan", name: "Guan Yifan", books: {
+    3: { cluster: "fleet", role: "cosmologist",
+      desc: "Very far from home, studying the universe the way a detective studies a room: on the assumption that something happened here.",
+      spoiler: "Aboard the deep-space human ships that survived the Dark Battle and went on to become a separate civilization, he investigates a four-dimensional fragment and the tomb-like wreck inside it, and works out that the universe's higher dimensions were spent as weapons in wars now unimaginably old — the dark forest is not a rule of nature but the wreckage of one. He meets Cheng Xin at Planet Blue, follows her into the pocket universe, and is with her at the end when they return its matter to a cosmos preparing to be born again." },
+    } },
+  { id: "fraisse", name: "Fraisse", books: {
+    3: { cluster: "common", role: "an elder in Australia",
+      desc: "An old man whose people have been resettled before. He knows exactly what the word means and what it does to those who use it.",
+      spoiler: "During the Great Resettlement he takes Cheng Xin in and teaches her how to survive a forced migration — a man whose ancestors were driven off this same land explaining the mechanics of it to the woman who could have prevented this one. When she is blinded by the strain, he is the one who cares for her. He is the book's quietest indictment: humanity does to itself exactly what it always did, only at species scale." },
+    } },
+
+  // ---------- Book III: Constantinople ----------
+  { id: "constantine", name: "Constantine XI", books: {
+    3: { cluster: "byz", role: "emperor",
+      desc: "The last emperor of a city under siege: out of soldiers, out of walls, and therefore willing to hear an impossible offer.",
+      spoiler: "He gambles the city on Helena's promise to reach into the sultan's tent and take his head, and when she fails he has nothing left. Constantinople falls in 1453 and he dies fighting at the breach. The whole episode is a prologue in disguise: a demonstration of what four-dimensional space can do to a three-dimensional world, four hundred pages before anyone in the main story needs to understand it." },
+    } },
+  { id: "mehmed", name: "Mehmed II", books: {
+    3: { cluster: "byz", role: "sultan",
+      desc: "Young, owner of the largest cannon in the world, and disinclined to wait for anything.",
+      spoiler: "He takes the city, and never learns how close he came to losing his head to a seamstress who could reach it from a direction he had no word for. He is the sequence's control condition: overwhelming conventional force, beating a miracle that arrived slightly out of alignment." },
+    } },
+  { id: "helena", name: "Helena", books: {
+    3: { cluster: "byz", role: "seamstress",
+      desc: "Possesses a talent she cannot explain and a sharp instinct for bargaining considerably above her station.",
+      spoiler: "She can produce sealed objects from inside locked reliquaries because she is passing through a four-dimensional fragment drifting across the city — reaching into three-dimensional objects the way you would reach into an open box. Contracted to steal Mehmed's head, she fails: the fragment moves, her access closes, and she is executed as a fraud. She never has any idea what she was actually doing." },
+    } },
+  { id: "phrantzes", name: "Phrantzes", books: {
+    3: { cluster: "byz", role: "chamberlain",
+      desc: "The emperor's man: sceptical of miracles by temperament, and obliged by his job to investigate one.",
+      spoiler: "He tests Helena, cannot explain her, and is left recording an event with no available explanation — the perspective the reader is meant to occupy. He survives the fall of the city only in the sense that the chronicle does." },
+    } },
+
+  // ---------- Book III: the tales ----------
+  { id: "deepwater", name: "Prince Deep Water", books: {
+    3: { cluster: "tale", role: "a prince in a story",
+      desc: "Everything about him is a smuggler's suitcase: exactly what it appears to be, and also not that at all.",
+      spoiler: "His story carries the lightspeed message. The bottomless boat that sails without displacing water, and the He'ershingenmosiken soap that lets it slip frictionlessly along, encode curvature propulsion and the trail it leaves — Yun Tianming telling humanity that lightspeed flight is possible and is the only real escape. The decryption team gets there; the Federation bans the technology anyway." },
+    } },
+  { id: "dewdrop", name: "Princess Dewdrop", books: {
+    3: { cluster: "tale", role: "a princess in a story",
+      desc: "Flees a collapsing kingdom carrying instructions she does not know she is carrying.",
+      spoiler: "She is the tales' carrier and the reader's proxy: the vehicle by which three encoded survival strategies leave a kingdom under total surveillance. Her flight through the Storyless Kingdom is the frame that lets Tianming say what he cannot say, in front of listeners who cannot conceive of a story meaning something other than itself." },
+    } },
+  { id: "icesand", name: "Prince Ice Sand", books: {
+    3: { cluster: "tale", role: "a brother in a story",
+      desc: "The reason the tale needs a villain, and the reason it can be told at all.",
+      spoiler: "His umbrella — spun until everything beneath it shrinks toward the axis — is the black domain: a region of slowed lightspeed, a self-made prison that also reads to the universe as a declaration of harmlessness. It is the second of the three survival options Tianming smuggles out, and the one humanity comes closest to actually attempting." },
+    } },
+  { id: "needleeye", name: "The Needle-Eye Painter", books: {
+    3: { cluster: "tale", role: "a painter in a story",
+      desc: "His portraits are said to be too accurate. It is not advisable to sit for one.",
+      spoiler: "To be painted is to be flattened into the picture and cease to exist in the round. He is the two-dimensional strike — the dark forest attack that unfolds three-dimensional space into two and kills everything in it — and his tale is the warning that reaches Earth too late to matter. When the solar system is finally struck, it is exactly the painting: everything true, everything beautiful, and nothing with any depth left." },
+    } },
+];
+
+/* ---------------------------------------------------------------- geometry */
+const CANVAS_W = 1080;
+const NODE_R = 15;
+
+// Deterministic jitter so the constellation looks hand-scattered but never
+// moves between renders (no Math.random anywhere).
+function wobble(seed, spread) {
+  const s = Math.sin(seed * 12.9898) * 43758.5453;
+  return ((s - Math.floor(s)) - 0.5) * 2 * spread;
+}
+
+// Lay out one book: cluster members onto rings, pack clusters into rows.
+function layoutBook(entries) {
+  const byCluster = new Map();
+  for (const e of entries) {
+    if (!byCluster.has(e.cluster)) byCluster.set(e.cluster, []);
+    byCluster.get(e.cluster).push(e);
+  }
+  const groups = [...byCluster.entries()]
+    .map(([key, members]) => ({ key, members }))
+    .sort((a, b) => b.members.length - a.members.length || a.key.localeCompare(b.key));
+
+  // ring geometry per group
+  for (const g of groups) {
+    const n = g.members.length;
+    if (n === 1) { g.rings = [{ r: 0, count: 1 }]; g.ring = 0; }
+    else if (n <= 6) { g.ring = 62 + n * 4; g.rings = [{ r: g.ring, count: n }]; }
+    else {
+      const outer = Math.ceil(n * 0.62), inner = n - outer;
+      g.ring = 78 + n * 3.4;
+      g.rings = [{ r: g.ring, count: outer }, { r: g.ring * 0.48, count: inner }];
+    }
+    g.box = 2 * (g.ring + 66); // room for the name labels under the outer ring
+  }
+
+  // greedy rows
+  const rows = [];
+  let row = [], rowW = 0;
+  for (const g of groups) {
+    if (row.length && rowW + g.box > CANVAS_W) { rows.push({ items: row, w: rowW }); row = []; rowW = 0; }
+    row.push(g); rowW += g.box;
+  }
+  if (row.length) rows.push({ items: row, w: rowW });
+
+  let y = 0;
+  const placed = [];
+  for (const r of rows) {
+    const rowH = Math.max(...r.items.map((g) => g.box));
+    let x = (CANVAS_W - r.w) / 2;
+    for (const g of r.items) {
+      const cx = x + g.box / 2, cy = y + rowH / 2;
+      let i = 0;
+      const nodes = [];
+      for (const ring of g.rings) {
+        for (let k = 0; k < ring.count; k++, i++) {
+          const m = g.members[i];
+          const a = -Math.PI / 2 + (k / ring.count) * Math.PI * 2 + (ring.r ? 0.22 : 0);
+          nodes.push({
+            ...m,
+            x: cx + Math.cos(a) * ring.r + wobble(i + g.key.length, ring.r ? 9 : 0),
+            y: cy + Math.sin(a) * ring.r * 0.86 + wobble(i * 3.1 + 1, ring.r ? 7 : 0),
+          });
+        }
+      }
+      placed.push({ key: g.key, cx, cy, ring: g.ring, nodes });
+      x += g.box;
+    }
+    y += rowH;
+  }
+  return { clusters: placed, height: Math.max(y, 320) };
+}
+
+/* -------------------------------------------------------------------- app */
+function App() {
+  const [book, setBook] = useState(1);
+  const [selected, setSelected] = useState(null);
+  const [hover, setHover] = useState(null);
+  const [focusCluster, setFocusCluster] = useState(null);
+  const [query, setQuery] = useState("");
+
+  const entries = useMemo(() => CAST
+    .filter((c) => c.books[book])
+    .map((c) => ({ id: c.id, name: c.name, aka: c.aka, ...c.books[book] })), [book]);
+
+  const layout = useMemo(() => layoutBook(entries), [entries]);
+  const byId = useMemo(() => new Map(entries.map((e) => [e.id, e])), [entries]);
+  const sel = selected ? byId.get(selected) : null;
+
+  const q = query.trim().toLowerCase();
+  const matches = q ? entries.filter((e) =>
+    e.name.toLowerCase().includes(q) ||
+    (e.aka || "").toLowerCase().includes(q) ||
+    e.role.toLowerCase().includes(q)).slice(0, 7) : [];
+
+  const alsoIn = sel
+    ? BOOKS.filter((b) => b.n !== book && CAST.find((c) => c.id === sel.id).books[b.n]).map((b) => b.roman)
+    : [];
+
+  const GRAIN = `url("data:image/svg+xml,${encodeURIComponent(
+    "<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='100%' height='100%' filter='url(#n)' opacity='0.5'/></svg>"
+  )}")`;
+
+  const activeBook = BOOKS[book - 1];
+
+  return (
+    <div className="registry">
+      <style>{CSS}</style>
+      <div className="stars" aria-hidden="true" />
+      <div className="grain" style={{ backgroundImage: GRAIN }} aria-hidden="true" />
+
+      <header className="masthead">
+        <div className="title-row">
+          <div>
+            <p className="eyebrow">Remembrance of Earth's Past · Liu Cixin · a spoiler-free registry</p>
+            <h1>The Dark Forest Registry</h1>
+            <p className="sub">
+              One constellation per book. Pick the volume you are reading; every
+              description here says only who a person is when you <i>meet</i> them
+              in that book — never what they turn out to be. Each dossier also
+              carries a <span className="inline-seal">⚠ sealed full entry</span> —
+              everything through the end of that book — which stays shut until you
+              open it yourself.
+            </p>
+          </div>
+          <div className="corner-seal" aria-hidden="true"><span>录</span></div>
+        </div>
+
+        <div className="dial" role="tablist" aria-label="Book">
+          {BOOKS.map((b) => (
+            <button key={b.n} role="tab" aria-selected={book === b.n}
+              className={`stamp ${book === b.n ? "on" : ""}`}
+              onClick={() => { setBook(b.n); setSelected(null); setFocusCluster(null); setQuery(""); }}>
+              <span className="cn">{b.cn}</span>
+              <span className="rn">Book {b.roman}</span>
+              <span className="en">{b.title}</span>
+            </button>
+          ))}
+        </div>
+        <p className="dialnote">
+          <b>Book {activeBook.roman} · {activeBook.title}</b>
+          <span className="hintline"> — {activeBook.tagline}</span>
+        </p>
+      </header>
+
+      <div className="stage">
+        <div className="canvas-wrap">
+          <svg viewBox={`0 0 ${CANVAS_W} ${layout.height}`} className="canvas"
+            role="img" aria-label={`Characters of ${activeBook.title}`}>
+            <defs>
+              <filter id="glow" x="-120%" y="-120%" width="340%" height="340%">
+                <feGaussianBlur stdDeviation="6" />
+              </filter>
+              <filter id="softglow" x="-60%" y="-60%" width="220%" height="220%">
+                <feGaussianBlur stdDeviation="18" />
+              </filter>
+            </defs>
+
+            <g key={book} className="sky">
+              {layout.clusters.map((cl) => {
+                const meta = CLUSTERS[cl.key];
+                const dim = focusCluster && focusCluster !== cl.key;
+                return (
+                  <g key={cl.key} className={`cluster ${dim ? "dim" : ""}`}>
+                    {/* nebula */}
+                    <circle cx={cl.cx} cy={cl.cy} r={cl.ring + 34} fill={meta.color}
+                      opacity={dim ? 0.03 : 0.09} filter="url(#softglow)" />
+                    <text x={cl.cx} y={cl.cy} className="cluster-hanzi" fill={meta.color}
+                      textAnchor="middle" dominantBaseline="central"
+                      opacity={dim ? 0.07 : 0.16}>{meta.hanzi}</text>
+
+                    {/* constellation lines: ring neighbours */}
+                    {cl.nodes.length > 1 && cl.nodes.map((n, i) => {
+                      const m = cl.nodes[(i + 1) % cl.nodes.length];
+                      if (cl.nodes.length === 2 && i === 1) return null;
+                      return <line key={i} x1={n.x} y1={n.y} x2={m.x} y2={m.y}
+                        className="link" stroke={meta.color} />;
+                    })}
+
+                    {cl.nodes.map((n) => {
+                      const on = selected === n.id, hot = hover === n.id;
+                      return (
+                        <g key={n.id} className={`node ${on ? "sel" : ""} ${hot ? "hot" : ""}`}
+                          transform={`translate(${n.x},${n.y})`} tabIndex={0} role="button"
+                          aria-label={n.name}
+                          onClick={() => setSelected(on ? null : n.id)}
+                          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelected(on ? null : n.id); } }}
+                          onPointerEnter={() => setHover(n.id)} onPointerLeave={() => setHover(null)}>
+                          {(on || hot) && <circle r={NODE_R + 12} fill={meta.color} opacity="0.5" filter="url(#glow)" />}
+                          <circle r={NODE_R} className="disc" fill="#0b0e17"
+                            stroke={meta.color} strokeWidth={on ? 2.6 : 1.4} />
+                          <circle r={4.6} fill={meta.color} className="core" />
+                          <text y={NODE_R + 17} textAnchor="middle" className="node-label">{n.name}</text>
+                        </g>
+                      );
+                    })}
+                  </g>
+                );
+              })}
+            </g>
+          </svg>
+
+          <div className="legend">
+            {focusCluster && (
+              <button className="chip all" onClick={() => setFocusCluster(null)}>&#215; all</button>
+            )}
+            {layout.clusters.map((cl) => (
+              <button key={cl.key} className={`chip ${focusCluster === cl.key ? "act" : ""}`}
+                onClick={() => setFocusCluster((f) => (f === cl.key ? null : cl.key))}>
+                <i style={{ background: CLUSTERS[cl.key].color }} />
+                {CLUSTERS[cl.key].name}
+                <b>{cl.nodes.length}</b>
+              </button>
+            ))}
+          </div>
+          <p className="hint">Tap a star for its dossier · tap a group below to dim the rest</p>
+        </div>
+
+        <aside className="margin">
+          <div className="search">
+            <input value={query} onChange={(e) => setQuery(e.target.value)}
+              placeholder="Find a name…" aria-label="Search characters" />
+            {matches.length > 0 && (
+              <ul className="results">
+                {matches.map((m) => (
+                  <li key={m.id} onClick={() => { setSelected(m.id); setQuery(""); }}>
+                    <i style={{ background: CLUSTERS[m.cluster].color }} />
+                    <span>{m.name}</span><em>{m.role}</em>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {q && matches.length === 0 && <p className="noresult">Nobody by that name in Book {activeBook.roman}.</p>}
+          </div>
+
+          {sel ? (
+            <Dossier entry={sel} alsoIn={alsoIn} book={activeBook}
+              onBack={() => setSelected(null)} />
+          ) : (
+            <Contents book={activeBook} entries={entries} onPick={setSelected}
+              focusCluster={focusCluster} setFocusCluster={setFocusCluster} />
+          )}
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+function Dossier({ entry, alsoIn, book, onBack }) {
+  const meta = CLUSTERS[entry.cluster];
+  // Sealed by default, and re-sealed whenever the character or book changes —
+  // the reader must open it deliberately, every single time.
+  const [open, setOpen] = useState(false);
+  useEffect(() => { setOpen(false); }, [entry.id, book.n]);
+
+  return (
+    <div className="record">
+      <button className="back" onClick={onBack}>← Contents</button>
+      <span className="tag" style={{ color: meta.color, borderColor: meta.color }}>
+        <b>{meta.hanzi}</b> {meta.name}
+      </span>
+      <h2 className="rec-title" style={{ color: meta.color }}>{entry.name}</h2>
+      {entry.aka && <p className="aka">also called {entry.aka}</p>}
+      <p className="role">{entry.role}</p>
+      <p className="desc">{entry.desc}</p>
+      <p className="safe">
+        Spoiler-free: written as of your <b>first meeting</b> in Book {book.roman}.
+      </p>
+
+      {entry.spoiler && (
+        <div className={`sealed ${open ? "open" : ""}`}>
+          <button className="seal-btn" onClick={() => setOpen((o) => !o)}
+            aria-expanded={open}>
+            <span className="warn-mk">⚠</span>
+            <span className="seal-text">
+              <b>{open ? "Hide the full entry" : "Reveal the full entry"}</b>
+              <em>Everything about {entry.name} through the end of Book {book.roman} — major spoilers.</em>
+            </span>
+            <span className="seal-chev">{open ? "▲" : "▼"}</span>
+          </button>
+          {open && (
+            <div className="spoiler-body">
+              <p className="spoiler-head">
+                Spoilers · complete through the end of Book {book.roman} — and no further
+              </p>
+              <p className="spoiler-text">{entry.spoiler}</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {alsoIn.length > 0 && (
+        <p className="alsoin">Also in Book {alsoIn.join(" & ")} — switch tabs for that book's version of this entry.</p>
+      )}
+    </div>
+  );
+}
+
+function Contents({ book, entries, onPick, focusCluster, setFocusCluster }) {
+  const groups = useMemo(() => {
+    const m = new Map();
+    for (const e of entries) {
+      if (!m.has(e.cluster)) m.set(e.cluster, []);
+      m.get(e.cluster).push(e);
+    }
+    return [...m.entries()].sort((a, b) => b[1].length - a[1].length);
+  }, [entries]);
+
+  return (
+    <div className="record">
+      <h2 className="rec-title">Contents</h2>
+      <p className="rec-vol">{book.cn} · Book {book.roman} · {entries.length} entries</p>
+
+      {groups.map(([key, members]) => {
+        const meta = CLUSTERS[key];
+        const dim = focusCluster && focusCluster !== key;
+        return (
+          <section key={key} className={dim ? "dimsec" : ""}>
+            <h4 style={{ color: meta.color }}
+              onClick={() => setFocusCluster((f) => (f === key ? null : key))}>
+              <span className="mk" style={{ borderColor: meta.color }}>{meta.hanzi}</span>
+              {meta.name}
+            </h4>
+            {meta.note && <p className="cnote">{meta.note}</p>}
+            <ul className="facelist">
+              {members.map((m) => (
+                <li key={m.id} onClick={() => onPick(m.id)}>
+                  <i style={{ background: meta.color }} />
+                  <span>{m.name}</span><em>{m.role}</em>
+                </li>
+              ))}
+            </ul>
+          </section>
+        );
+      })}
+
+      <p className="warn">
+        One leak is unavoidable: a name listed under a later book is, by that
+        fact alone, still in the story then. Everything else here is written to
+        tell you nothing you have not already read.
+      </p>
+    </div>
+  );
+}
+
+const CSS = `
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Inter:wght@400;500;600&family=Ma+Shan+Zheng&display=swap');
+
+.registry{
+  --void:#07080d; --panel:#0d1119; --panel2:#111725; --edge:#232c3d;
+  --text:#dfe6f2; --text2:#9aa7bd; --faint:#5f6b81;
+  position:relative; min-height:100vh; background:
+    radial-gradient(1100px 620px at 18% -8%, #14203a 0%, transparent 62%),
+    radial-gradient(900px 520px at 92% 8%, #1b1330 0%, transparent 60%),
+    var(--void);
+  color:var(--text); font-family:'Inter',system-ui,sans-serif;
+  padding:0 0 40px; overflow-x:hidden;
+}
+.registry .stars{
+  position:fixed; inset:0; pointer-events:none; opacity:.55;
+  background-image:
+    radial-gradient(1.4px 1.4px at 12% 22%, #fff 50%, transparent 51%),
+    radial-gradient(1.1px 1.1px at 78% 12%, #cfe0ff 50%, transparent 51%),
+    radial-gradient(1.6px 1.6px at 44% 66%, #fff 50%, transparent 51%),
+    radial-gradient(1px 1px at 62% 38%, #b8ccff 50%, transparent 51%),
+    radial-gradient(1.2px 1.2px at 26% 84%, #fff 50%, transparent 51%),
+    radial-gradient(1px 1px at 88% 72%, #dce8ff 50%, transparent 51%),
+    radial-gradient(1.3px 1.3px at 6% 54%, #fff 50%, transparent 51%),
+    radial-gradient(1px 1px at 54% 8%, #fff 50%, transparent 51%);
+  background-size:520px 520px,430px 430px,610px 610px,370px 370px,700px 700px,480px 480px,560px 560px,640px 640px;
+}
+.registry .grain{position:fixed; inset:0; pointer-events:none; opacity:.05; mix-blend-mode:overlay}
+
+.masthead{position:relative; z-index:2; max-width:1560px; margin:0 auto; padding:30px 30px 6px}
+.title-row{display:flex; justify-content:space-between; align-items:flex-start; gap:20px}
+.eyebrow{margin:0 0 6px; font-size:11.5px; letter-spacing:.16em; text-transform:uppercase; color:var(--faint)}
+.masthead h1{
+  margin:0; font-family:'Cormorant Garamond',serif; font-weight:600;
+  font-size:clamp(34px,4.6vw,58px); letter-spacing:.01em;
+  background:linear-gradient(94deg,#eaf1ff,#9fc6ff 46%,#c9a8ff);
+  -webkit-background-clip:text; background-clip:text; color:transparent;
+}
+.masthead .sub{margin:10px 0 0; max-width:62ch; font-size:14px; line-height:1.6; color:var(--text2)}
+.inline-seal{
+  white-space:nowrap; padding:1px 6px; border-radius:5px; font-size:12.5px;
+  border:1px dashed #6b3232; background:#1c1114; color:#e79a9a;
+}
+.corner-seal{
+  flex:0 0 auto; width:62px; height:62px; border:1px solid #3a2f4d; border-radius:8px;
+  display:grid; place-items:center; background:#160f22; box-shadow:0 0 34px #2a1c46 inset;
+}
+.corner-seal span{font-family:'Ma Shan Zheng',serif; font-size:32px; color:#b28cf0}
+
+.dial{display:flex; flex-wrap:wrap; gap:12px; margin:22px 0 0}
+.stamp{
+  cursor:pointer; text-align:left; padding:11px 16px; border-radius:10px;
+  background:linear-gradient(180deg,#0f1420,#0b0f18); border:1px solid var(--edge);
+  color:var(--text2); font-family:inherit; transition:.18s; display:flex;
+  flex-direction:column; gap:1px; min-width:190px;
+}
+.stamp:hover{border-color:#3d4a63; color:var(--text); transform:translateY(-1px)}
+.stamp.on{
+  border-color:#6f8fd8; color:var(--text);
+  background:linear-gradient(180deg,#182444,#0e1524);
+  box-shadow:0 0 0 1px #6f8fd855, 0 8px 26px -12px #4b6bc0;
+}
+.stamp .cn{font-family:'Ma Shan Zheng',serif; font-size:19px; letter-spacing:.1em; color:#8fb4ff}
+.stamp .rn{font-size:10.5px; letter-spacing:.18em; text-transform:uppercase; color:var(--faint)}
+.stamp.on .rn{color:#9fc6ff}
+.stamp .en{font-family:'Cormorant Garamond',serif; font-size:17px}
+.dialnote{margin:14px 0 0; font-size:13px; color:var(--text2)}
+.dialnote b{color:var(--text); font-weight:600}
+.hintline{color:var(--faint)}
+
+.stage{
+  position:relative; z-index:2; max-width:1560px; margin:14px auto 0; padding:0 30px;
+  display:grid; grid-template-columns:minmax(0,1fr) 372px; gap:26px; align-items:start;
+}
+@media (max-width:1080px){ .stage{grid-template-columns:1fr} }
+
+.canvas-wrap{
+  background:linear-gradient(180deg,#0a0e17cc,#070a11cc); border:1px solid var(--edge);
+  border-radius:14px; padding:8px 8px 12px; box-shadow:0 30px 70px -40px #000;
+}
+.canvas{width:100%; height:auto; display:block; touch-action:pan-y}
+.sky{animation:fade .5s ease}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+.cluster{transition:opacity .25s}
+.cluster.dim{opacity:.22}
+.cluster-hanzi{font-family:'Ma Shan Zheng',serif; font-size:74px}
+.link{stroke-width:.9; opacity:.28; stroke-dasharray:3 5}
+.node{cursor:pointer; outline:none}
+.node .disc{transition:.16s}
+.node .core{transition:.16s}
+.node-label{
+  font-family:'Cormorant Garamond',serif; font-size:14.5px; fill:#c8d3e6;
+  paint-order:stroke; stroke:#070a11; stroke-width:3.5px; pointer-events:none;
+}
+.node.hot .node-label,.node.sel .node-label{fill:#fff; font-weight:600}
+.node:focus-visible .disc{stroke-width:3}
+.node.sel .core,.node.hot .core{r:6}
+
+.legend{display:flex; flex-wrap:wrap; gap:7px; padding:12px 8px 0}
+.chip{
+  cursor:pointer; display:inline-flex; align-items:center; gap:7px; padding:5px 10px;
+  border-radius:999px; border:1px solid var(--edge); background:#0c1119;
+  color:var(--text2); font:500 11.5px/1 'Inter',sans-serif; transition:.15s;
+}
+.chip:hover{border-color:#3d4a63; color:var(--text)}
+.chip.act{border-color:#7f9fd8; color:#fff; background:#131c2e}
+.chip.all{border-color:#5a4a6e; color:#c6aef0}
+.chip i{width:8px; height:8px; border-radius:50%; box-shadow:0 0 8px currentColor}
+.chip b{color:var(--faint); font-weight:600}
+.hint{margin:10px 8px 0; font-size:11.5px; color:var(--faint)}
+
+.margin{position:sticky; top:16px}
+.search{position:relative; margin-bottom:12px}
+.search input{
+  width:100%; box-sizing:border-box; padding:11px 14px; border-radius:10px;
+  border:1px solid var(--edge); background:#0b0f18; color:var(--text);
+  font:400 14px 'Inter',sans-serif;
+}
+.search input:focus{outline:none; border-color:#6f8fd8; box-shadow:0 0 0 3px #6f8fd822}
+.results{
+  list-style:none; margin:6px 0 0; padding:6px; position:absolute; z-index:5; left:0; right:0;
+  background:#0e131e; border:1px solid var(--edge); border-radius:10px; box-shadow:0 20px 40px -20px #000;
+}
+.results li{
+  display:flex; align-items:center; gap:9px; padding:7px 9px; border-radius:7px;
+  cursor:pointer; font-size:13.5px;
+}
+.results li:hover{background:#16202f}
+.results i{width:8px; height:8px; border-radius:50%; flex:0 0 auto}
+.results em{margin-left:auto; font-style:normal; font-size:11px; color:var(--faint)}
+.noresult{margin:8px 2px 0; font-size:12px; color:var(--faint)}
+
+.record{
+  background:linear-gradient(180deg,var(--panel2),var(--panel)); border:1px solid var(--edge);
+  border-radius:14px; padding:20px; max-height:calc(100vh - 120px); overflow:auto;
+  box-shadow:0 30px 70px -40px #000;
+}
+.back{
+  cursor:pointer; background:none; border:none; padding:0 0 10px; color:var(--text2);
+  font:500 12px 'Inter',sans-serif;
+}
+.back:hover{color:var(--text)}
+.tag{
+  display:inline-flex; align-items:center; gap:6px; padding:3px 9px; border-radius:999px;
+  border:1px solid currentColor; font-size:11px; opacity:.9;
+}
+.tag b{font-family:'Ma Shan Zheng',serif; font-size:14px; font-weight:400}
+.rec-title{margin:12px 0 2px; font-family:'Cormorant Garamond',serif; font-weight:600; font-size:29px; line-height:1.1}
+.rec-vol{margin:0 0 14px; font-size:11.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--faint)}
+.aka{margin:0; font-size:13px; color:var(--text2); font-style:italic}
+.role{margin:6px 0 0; font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:var(--faint)}
+.desc{margin:14px 0 0; font-family:'Cormorant Garamond',serif; font-size:18px; line-height:1.62; color:#e6ecf7}
+.safe{
+  margin:18px 0 0; padding:9px 11px; border-radius:8px; background:#0b1520;
+  border:1px solid #1d3346; font-size:11.5px; color:#8fb4c6;
+}
+.safe b{color:#bfe0ee}
+.alsoin{margin:14px 0 0; font-size:11.5px; color:var(--faint)}
+
+/* --- the sealed spoiler block: shut by default, opened only on purpose --- */
+.sealed{
+  margin:16px 0 0; border:1px dashed #5a2b2b; border-radius:10px; overflow:hidden;
+  background:repeating-linear-gradient(135deg,#170f12,#170f12 9px,#1b1114 9px,#1b1114 18px);
+  transition:border-color .2s;
+}
+.sealed.open{border-style:solid; border-color:#7d3535; background:#150e11}
+.seal-btn{
+  width:100%; box-sizing:border-box; display:flex; align-items:center; gap:11px; text-align:left;
+  padding:11px 13px; background:none; border:none; cursor:pointer; color:#e79a9a;
+  font-family:inherit;
+}
+.seal-btn:hover{background:#201216}
+.seal-btn:focus-visible{outline:2px solid #b05555; outline-offset:-2px}
+.warn-mk{
+  flex:0 0 auto; width:24px; height:24px; display:grid; place-items:center; font-size:12px;
+  border:1px solid #8a3b3b; border-radius:6px; background:#2a1216; color:#ff9d9d;
+}
+.seal-text{display:flex; flex-direction:column; gap:2px; min-width:0}
+.seal-text b{font-size:12.5px; font-weight:600; letter-spacing:.02em}
+.seal-text em{font-style:normal; font-size:11px; line-height:1.45; color:#a97b7b}
+.seal-chev{margin-left:auto; font-size:9px; color:#a05a5a}
+.spoiler-body{padding:0 13px 14px; animation:unseal .22s ease}
+@keyframes unseal{from{opacity:0; transform:translateY(-4px)}to{opacity:1; transform:none}}
+.spoiler-head{
+  margin:0 0 9px; padding-top:11px; border-top:1px solid #3a1f24;
+  font-size:10.5px; letter-spacing:.14em; text-transform:uppercase; color:#b06a6a;
+}
+.spoiler-text{
+  margin:0; font-family:'Cormorant Garamond',serif; font-size:17px; line-height:1.62; color:#f0dede;
+}
+
+.record section{margin:0 0 16px}
+.record section.dimsec{opacity:.4}
+.record h4{
+  margin:0 0 7px; font:600 12.5px 'Inter',sans-serif; letter-spacing:.06em;
+  display:flex; align-items:center; gap:8px; cursor:pointer;
+}
+.record h4 .mk{
+  font-family:'Ma Shan Zheng',serif; font-size:13px; font-weight:400; width:20px; height:20px;
+  display:grid; place-items:center; border:1px solid currentColor; border-radius:5px; opacity:.75;
+}
+.cnote{margin:0 0 7px 28px; font-size:11.5px; line-height:1.5; color:var(--faint); font-style:italic}
+.facelist{list-style:none; margin:0; padding:0}
+.facelist li{
+  display:flex; align-items:center; gap:9px; padding:6px 8px; border-radius:7px;
+  cursor:pointer; font-size:13.5px; border-left:1px solid transparent;
+}
+.facelist li:hover{background:#16202f; border-left-color:#6f8fd8}
+.facelist i{width:7px; height:7px; border-radius:50%; flex:0 0 auto; box-shadow:0 0 7px currentColor}
+.facelist em{margin-left:auto; font-style:normal; font-size:11px; color:var(--faint); text-align:right}
+.warn{
+  margin:18px 0 0; padding:10px 12px; border-radius:8px; background:#1a1424;
+  border:1px solid #2f2440; font-size:11.5px; line-height:1.55; color:#b39cd0;
+}
+`;
+
+const _root = ReactDOM.createRoot(document.getElementById("root"));
+_root.render(<App />);
+</script>
+</body>
+</html>
